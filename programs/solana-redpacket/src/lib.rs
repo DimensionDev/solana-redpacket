@@ -267,6 +267,7 @@ pub struct RedPacketWithSPLToken<'info> {
     #[account(mut, seeds = [red_packet.creator.key().as_ref(), red_packet.create_time.to_le_bytes().as_ref()], bump)]
     pub red_packet: Account<'info, RedPacket>,
   
+    #[account(address = red_packet.token_address)]
     pub token_mint: InterfaceAccount<'info, Mint>,
 
     #[account(

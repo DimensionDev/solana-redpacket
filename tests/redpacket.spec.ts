@@ -85,7 +85,7 @@ describe("redpacket", () => {
       // Airdrop some SOL to redPacketCreator
       const airdropSignature = await connection.requestAirdrop(
         redPacketCreator.publicKey,
-        10 * LAMPORTS_PER_SOL // This will airdrop 1 SOL
+        20 * LAMPORTS_PER_SOL // This will airdrop 1 SOL
       );
       await confirmTransaction(connection, airdropSignature);
 
