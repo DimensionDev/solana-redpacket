@@ -194,6 +194,11 @@ pub mod redpacket {
         **ctx.accounts.signer.to_account_info().try_borrow_mut_lamports()? = dest_starting_lamports
             .checked_add(red_packet_lamports)
             .unwrap();
+        
+        msg!("withdraw_with_spl_token_signer: {}", *ctx.accounts.signer.key);
+        msg!("withdraw_with_spl_token_mint_address: {}", ctx.accounts.token_mint.key());
+        msg!("withdraw_with_spl_token_amount: {}", remaining_amount);
+        msg!("withdraw_with_spl_token_remaining_lamports: {}", red_packet_lamports);
 
         Ok(())
     }
@@ -208,11 +213,17 @@ pub mod redpacket {
         // Transfer all lamports (remaining balance + rent) to signer
         let dest_starting_lamports = ctx.accounts.signer.lamports();
         let red_packet_lamports = ctx.accounts.red_packet.to_account_info().lamports();
+        let remaining_amount = ctx.accounts.red_packet.total_amount - ctx.accounts.red_packet.claimed_amount;
+
         **ctx.accounts.red_packet.to_account_info().try_borrow_mut_lamports()? = 0;
         **ctx.accounts.signer.to_account_info().try_borrow_mut_lamports()? = dest_starting_lamports
             .checked_add(red_packet_lamports)
             .unwrap();
-      
+        
+        msg!("withdraw_with_native_token_signer: {}", *ctx.accounts.signer.key);
+        msg!("withdraw_with_native_token_red_packet_remaining_lamports: {}", remaining_amount);
+        msg!("withdraw_with_native_token_total_lamports: {}", red_packet_lamports);
+        
         Ok(())
     }
 
