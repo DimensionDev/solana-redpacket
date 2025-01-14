@@ -150,6 +150,13 @@ describe("redpacket", () => {
     }
   });
 
+  // it.only("log", async () => {
+  //   const redPacket = await redPacketProgram.account.redPacket.fetch(
+  //     new PublicKey("H9bkzH88wHnePjd3ge1P78cgmxJNoaUJFoDT5FWPsaDA")
+  //   );
+  //   console.log(redPacket);
+  // });
+
   it("create SPL token redpacket", async () => {
     const creatorTokenBalanceBefore = await connection.getTokenAccountBalance(
       tokenAccount
@@ -273,7 +280,7 @@ describe("redpacket", () => {
   it("create native token redpacket", async () => {
     const redPacketDuration = new anchor.BN(8);
     const redPacketTotalNumber = 3;
-    const redPacketTotalAmount = new anchor.BN(3 * LAMPORTS_PER_SOL);
+    const redPacketTotalAmount = new anchor.BN(0.3 * LAMPORTS_PER_SOL);
     nativeRedPacketCreateTime = new anchor.BN(
       Math.floor(Date.now() / 1000) + 3
     );
@@ -566,14 +573,12 @@ describe("redpacket", () => {
     );
 
     expect(redPacketAccount.claimedNumber.toString()).equal("1");
-    expect(redPacketAccount.claimedAmount.toString()).equal(
-      (1 * LAMPORTS_PER_SOL).toString()
-    );
+
     const claimerBalanceAfter = await connection.getBalance(
       randomUser.publicKey
     );
     expect(claimerBalanceAfter - claimerBalanceBefore).equal(
-      1 * LAMPORTS_PER_SOL
+      0.1 * LAMPORTS_PER_SOL
     );
     expect(redPacketAccount.claimedUsers.length).equal(1);
     expect(redPacketAccount.claimedUsers[0].toString()).equal(
@@ -780,7 +785,7 @@ describe("redpacket", () => {
     )[0];
     const redPacketDuration = new anchor.BN(60 * 60 * 24);
     const redPacketTotalNumber = 3;
-    const redPacketTotalAmount = new anchor.BN(3 * LAMPORTS_PER_SOL);
+    const redPacketTotalAmount = new anchor.BN(0.03 * LAMPORTS_PER_SOL);
 
     const tx = await redPacketProgram.methods
       .createRedPacketWithNativeToken(

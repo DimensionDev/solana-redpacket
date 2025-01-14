@@ -76,9 +76,8 @@ pub mod redpacket {
         )?;
 
         initialize_red_packet(&mut ctx.accounts.red_packet, *ctx.accounts.signer.key, total_number, total_amount, create_time, duration, constants::RED_PACKET_USE_NATIVE_TOKEN, Pubkey::default(), if_spilt_random, pubkey_for_claim_signature, name, message);
-
+       
         Ok(())
-
     }
     
     pub fn claim_with_spl_token(ctx: Context<RedPacketWithSPLToken>) -> Result<()> {
@@ -118,6 +117,9 @@ pub mod redpacket {
         red_packet.claimed_amount_records.push(claim_amount);
         red_packet.claimed_number += 1;
         red_packet.claimed_amount += claim_amount;
+        msg!("claimer: {}", *ctx.accounts.signer.key);
+        msg!("claim_token_address: {}", ctx.accounts.token_mint.key());
+        msg!("claim_amount: {}", claim_amount);
         
         Ok(())
     }
@@ -147,6 +149,9 @@ pub mod redpacket {
         red_packet.claimed_number += 1;
         red_packet.claimed_amount += claim_amount;
 
+        msg!("claimer: {}", *ctx.accounts.signer.key);
+        msg!("claim_token_address: {}", red_packet.token_address.to_string());
+        msg!("claim_amount: {}", claim_amount);
         Ok(())
     }
 
@@ -195,10 +200,10 @@ pub mod redpacket {
             .checked_add(red_packet_lamports)
             .unwrap();
         
-        msg!("withdraw_with_spl_token_signer: {}", *ctx.accounts.signer.key);
-        msg!("withdraw_with_spl_token_mint_address: {}", ctx.accounts.token_mint.key());
-        msg!("withdraw_with_spl_token_amount: {}", remaining_amount);
-        msg!("withdraw_with_spl_token_remaining_lamports: {}", red_packet_lamports);
+        msg!("withdraw_signer: {}", *ctx.accounts.signer.key);
+        msg!("withdraw_token_address: {}", ctx.accounts.token_mint.key());
+        msg!("withdraw_red_packet_remaining_lamports: {}", red_packet_lamports);
+        msg!("withdraw_amount: {}", remaining_amount);
 
         Ok(())
     }
@@ -220,9 +225,10 @@ pub mod redpacket {
             .checked_add(red_packet_lamports)
             .unwrap();
         
-        msg!("withdraw_with_native_token_signer: {}", *ctx.accounts.signer.key);
-        msg!("withdraw_with_native_token_red_packet_remaining_lamports: {}", remaining_amount);
-        msg!("withdraw_with_native_token_total_lamports: {}", red_packet_lamports);
+        msg!("withdraw_signer: {}", *ctx.accounts.signer.key);
+        msg!("withdraw_token_address: {}", ctx.accounts.red_packet.token_address);
+        msg!("withdraw_red_packet_remaining_lamports: {}", remaining_amount);
+        msg!("withdraw_amount: {}", red_packet_lamports);
         
         Ok(())
     }
@@ -392,6 +398,7 @@ pub fn initialize_red_packet(
     name: String,
     message: String,
 ) {
+    msg!("create_red_packet: {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}", red_packet.key(), creator.key(), total_number, total_amount, create_time, duration, constants::RED_PACKET_USE_CUSTOM_TOKEN, token_address.to_string(), if_spilt_random, pubkey_for_claim_signature, name, message);
     red_packet.set_inner(RedPacket {
         creator,
         total_number,
@@ -426,7 +433,6 @@ fn calculate_claim_amount(red_packet: &Account<RedPacket>, signer_key: Pubkey) -
         let claim_value = random_value % ((remaining_amount * 2) / (red_packet.total_number - red_packet.claimed_number) as u64);
         claim_amount = if claim_value == 0 { 1 } else { claim_value };
     } 
-    msg!("claim_amount: {}", claim_amount);
     return claim_amount;
 }
 
