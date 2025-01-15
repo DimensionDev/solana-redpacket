@@ -117,6 +117,8 @@ pub mod redpacket {
         red_packet.claimed_amount_records.push(claim_amount);
         red_packet.claimed_number += 1;
         red_packet.claimed_amount += claim_amount;
+
+        msg!("claim_red_packet: {}", red_packet.key());
         msg!("claimer: {}", *ctx.accounts.signer.key);
         msg!("claim_token_address: {}", ctx.accounts.token_mint.key());
         msg!("claim_amount: {}", claim_amount);
@@ -149,6 +151,7 @@ pub mod redpacket {
         red_packet.claimed_number += 1;
         red_packet.claimed_amount += claim_amount;
 
+        msg!("claim_red_packet: {}", red_packet.key());
         msg!("claimer: {}", *ctx.accounts.signer.key);
         msg!("claim_token_address: {}", red_packet.token_address.to_string());
         msg!("claim_amount: {}", claim_amount);
@@ -199,7 +202,8 @@ pub mod redpacket {
         **ctx.accounts.signer.to_account_info().try_borrow_mut_lamports()? = dest_starting_lamports
             .checked_add(red_packet_lamports)
             .unwrap();
-        
+
+        msg!("withdraw_red_packet: {}", ctx.accounts.red_packet.key());
         msg!("withdraw_signer: {}", *ctx.accounts.signer.key);
         msg!("withdraw_token_address: {}", ctx.accounts.token_mint.key());
         msg!("withdraw_red_packet_remaining_lamports: {}", red_packet_lamports);
@@ -225,6 +229,7 @@ pub mod redpacket {
             .checked_add(red_packet_lamports)
             .unwrap();
         
+        msg!("withdraw_red_packet: {}", ctx.accounts.red_packet.key());
         msg!("withdraw_signer: {}", *ctx.accounts.signer.key);
         msg!("withdraw_token_address: {}", ctx.accounts.red_packet.token_address);
         msg!("withdraw_red_packet_remaining_lamports: {}", remaining_amount);
