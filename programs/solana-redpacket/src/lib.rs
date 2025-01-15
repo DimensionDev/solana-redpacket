@@ -134,7 +134,6 @@ pub mod redpacket {
         let expiry = red_packet.create_time + red_packet.duration;
         require!(current_time < expiry, CustomError::RedPacketExpired);
         require!(red_packet.claimed_number < red_packet.total_number, CustomError::RedPacketAllClaimed);
-        //require!(!red_packet.claimed_users.contains(&ctx.accounts.signer.key()), CustomError::RedPacketClaimed);
 
         // verify signature
         require!(verify_claim_signature(&ctx.accounts.instructions, red_packet.key().as_ref(), ctx.accounts.signer.key.as_ref(), red_packet.pubkey_for_claim_signature.to_bytes().as_ref()).is_ok(), CustomError::InvalidSignature);
@@ -537,9 +536,10 @@ pub fn verify_claim_signature(
     // Verify public key
     let pubkey_start = offsets.public_key_offset as usize;
     let pubkey_end = pubkey_start + 32;
-    if &instruction_data[pubkey_start..pubkey_end] != expected_public_key_arr {
-        msg!("fail to verify pubkey: {} ", pubkey_start);
-        msg!("fail to verify expected_public_key: {:?} ", expected_public_key_arr);
+    let pubkey_arr = &instruction_data[pubkey_start..pubkey_end];
+    if pubkey_arr != expected_public_key_arr {
+        msg!("fail to verify pubkey_arr: {:?}", pubkey_arr);
+        msg!("fail to verify expected_public_key: {:?}", expected_public_key_arr);
         return Err(error!(CustomError::InvalidSignature));
     }
 
