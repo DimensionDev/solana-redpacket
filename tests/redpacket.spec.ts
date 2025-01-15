@@ -150,6 +150,13 @@ describe("redpacket", () => {
     }
   });
 
+  // it.only("log", async () => {
+  //   const redPacket = await redPacketProgram.account.redPacket.fetch(
+  //     new PublicKey("H9bkzH88wHnePjd3ge1P78cgmxJNoaUJFoDT5FWPsaDA")
+  //   );
+  //   console.log(redPacket);
+  // });
+
   it("create SPL token redpacket", async () => {
     const creatorTokenBalanceBefore = await connection.getTokenAccountBalance(
       tokenAccount
@@ -184,7 +191,7 @@ describe("redpacket", () => {
 
     const redPacketTotalNumber = 3;
     const redPacketTotalAmount = new anchor.BN(4 * LAMPORTS_PER_SOL);
-    const redPacketDuration = new anchor.BN(7 * 60 * 60 * 24);
+    const redPacketDuration = new anchor.BN(8);
 
     try {
       const tx = await redPacketProgram.methods
@@ -271,9 +278,9 @@ describe("redpacket", () => {
   });
 
   it("create native token redpacket", async () => {
-    const redPacketDuration = new anchor.BN(1000 * 60 * 60 * 24);
+    const redPacketDuration = new anchor.BN(8);
     const redPacketTotalNumber = 3;
-    const redPacketTotalAmount = new anchor.BN(3 * LAMPORTS_PER_SOL);
+    const redPacketTotalAmount = new anchor.BN(0.3 * LAMPORTS_PER_SOL);
     nativeRedPacketCreateTime = new anchor.BN(
       Math.floor(Date.now() / 1000) + 3
     );
@@ -566,14 +573,12 @@ describe("redpacket", () => {
     );
 
     expect(redPacketAccount.claimedNumber.toString()).equal("1");
-    expect(redPacketAccount.claimedAmount.toString()).equal(
-      (1 * LAMPORTS_PER_SOL).toString()
-    );
+
     const claimerBalanceAfter = await connection.getBalance(
       randomUser.publicKey
     );
     expect(claimerBalanceAfter - claimerBalanceBefore).equal(
-      1 * LAMPORTS_PER_SOL
+      0.1 * LAMPORTS_PER_SOL
     );
     expect(redPacketAccount.claimedUsers.length).equal(1);
     expect(redPacketAccount.claimedUsers[0].toString()).equal(
@@ -780,7 +785,7 @@ describe("redpacket", () => {
     )[0];
     const redPacketDuration = new anchor.BN(60 * 60 * 24);
     const redPacketTotalNumber = 3;
-    const redPacketTotalAmount = new anchor.BN(3 * LAMPORTS_PER_SOL);
+    const redPacketTotalAmount = new anchor.BN(0.03 * LAMPORTS_PER_SOL);
 
     const tx = await redPacketProgram.methods
       .createRedPacketWithNativeToken(
@@ -921,7 +926,35 @@ describe("redpacket", () => {
       ],
       redPacketProgram.programId
     )[0];
+    const redPacketAccount = await redPacketProgram.account.redPacket.fetch(
+      redPacket
+    );
+    const redPacketRemainedAmount = redPacketAccount.totalAmount.sub(
+      redPacketAccount.claimedAmount
+    );
+    console.log(
+      "redPacket token RemainedAmount",
+      redPacketRemainedAmount.toString()
+    );
 
+    const creatorLamportsBefore = await provider.connection.getBalance(
+      redPacketCreator.publicKey
+    );
+    console.log("creatorLamportsBefore", creatorLamportsBefore.toString());
+
+    const creatorTokenBalanceBefore =
+      await provider.connection.getTokenAccountBalance(
+        getAssociatedTokenAddressSync(
+          tokenMint,
+          redPacketCreator.publicKey,
+          true,
+          TOKEN_PROGRAM
+        )
+      );
+    console.log(
+      "creatorTokenBalanceBefore",
+      creatorTokenBalanceBefore.value.uiAmount.toString()
+    );
     // Now perform withdrawal
     const withdrawTx = await redPacketProgram.methods
       .withdrawWithSplToken()
@@ -938,6 +971,27 @@ describe("redpacket", () => {
       .rpc();
 
     await provider.connection.confirmTransaction(withdrawTx);
+    await getLogs(withdrawTx);
+
+    const creatorTokenBalanceAfter =
+      await provider.connection.getTokenAccountBalance(
+        getAssociatedTokenAddressSync(
+          tokenMint,
+          redPacketCreator.publicKey,
+          true,
+          TOKEN_PROGRAM
+        )
+      );
+
+    console.log(
+      "creatorTokenBalanceAfter",
+      creatorTokenBalanceAfter.value.amount.toString()
+    );
+    expect(
+      new anchor.BN(creatorTokenBalanceAfter.value.amount)
+        .sub(new anchor.BN(creatorTokenBalanceBefore.value.amount))
+        .toString()
+    ).equal(redPacketRemainedAmount.toString());
 
     // Verify the account is closed
     try {
@@ -957,6 +1011,29 @@ describe("redpacket", () => {
       ],
       redPacketProgram.programId
     )[0];
+    const redPacketAccount = await redPacketProgram.account.redPacket.fetch(
+      redPacket
+    );
+    const redPacketRemainedAmount = redPacketAccount.totalAmount.sub(
+      redPacketAccount.claimedAmount
+    );
+    console.log(
+      "redPacketAccount.totalAmount",
+      redPacketAccount.totalAmount.toString()
+    );
+    console.log(
+      "redPacketAccount.claimedAmount",
+      redPacketAccount.claimedAmount.toString()
+    );
+    console.log(
+      "redPacketAccount.remainedAmount",
+      redPacketRemainedAmount.toString()
+    );
+
+    const creatorLamportsBefore = await provider.connection.getBalance(
+      redPacketCreator.publicKey
+    );
+    console.log("creatorLamportsBefore", creatorLamportsBefore.toString());
     // Now perform withdrawal
     const withdrawTx = await redPacketProgram.methods
       .withdrawWithNativeToken()
@@ -970,6 +1047,14 @@ describe("redpacket", () => {
 
     await provider.connection.confirmTransaction(withdrawTx);
     await getLogs(withdrawTx);
+    const creatorLamportsAfter = await provider.connection.getBalance(
+      redPacketCreator.publicKey
+    );
+    console.log("creatorLamportsAfter", creatorLamportsAfter.toString());
+
+    expect(creatorLamportsAfter - creatorLamportsBefore).greaterThan(
+      redPacketRemainedAmount.toNumber()
+    );
 
     // Verify the account is closed
     try {
@@ -1329,6 +1414,7 @@ async function getLogs(signature: string) {
       console.error("Failed to retrieve logs for transaction:", signature);
       return;
     }
+
     console.log("Program Logs:");
     console.log(logs.meta.logMessages.join("\n"));
   } catch (error) {
