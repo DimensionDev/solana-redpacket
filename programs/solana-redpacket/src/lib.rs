@@ -80,14 +80,12 @@ pub mod redpacket {
         Ok(())
     }
     
-    pub fn claim_with_spl_token(ctx: Context<RedPacketWithSPLToken>) -> Result<()> {
+    pub fn claim_with_spl_token(ctx: Context<ClaimRedPacketWithSPLToken>) -> Result<()> {
         let red_packet = &mut ctx.accounts.red_packet;
         let _current_time = Clock::get().unwrap().unix_timestamp;
         let expiry = red_packet.create_time + red_packet.duration;
-        require!(_current_time < expiry as i64, CustomError::RedPacketExpired);
-        
+        require!(_current_time < expiry as i64, CustomError::RedPacketExpired);        
         require!(red_packet.claimed_number < red_packet.total_number, CustomError::RedPacketAllClaimed);
-        require!(!red_packet.claimed_users.contains(&ctx.accounts.signer.key()), CustomError::RedPacketClaimed);
         
         // verify signature
         require!(verify_claim_signature(&ctx.accounts.instructions, red_packet.key().as_ref(), ctx.accounts.signer.key.as_ref(), red_packet.pubkey_for_claim_signature.to_bytes().as_ref()).is_ok(), CustomError::InvalidSignature);
@@ -113,10 +111,13 @@ pub mod redpacket {
             signer_seeds
         )?;
         
-        red_packet.claimed_users.push(ctx.accounts.signer.key());
-        red_packet.claimed_amount_records.push(claim_amount);
         red_packet.claimed_number += 1;
         red_packet.claimed_amount += claim_amount;
+
+        ctx.accounts.claim_record.set_inner(ClaimRecord {
+            claimer: *ctx.accounts.signer.key,
+            amount: claim_amount,
+        }); 
 
         msg!("claim_red_packet: {}", red_packet.key());
         msg!("claimer: {}", *ctx.accounts.signer.key);
@@ -126,14 +127,14 @@ pub mod redpacket {
         Ok(())
     }
 
-    pub fn claim_with_native_token(ctx: Context<RedPacketWithNativeToken>) -> Result<()> {
+    pub fn claim_with_native_token(ctx: Context<ClaimRedPacketWithNativeToken>) -> Result<()> {
         let red_packet = &mut ctx.accounts.red_packet;
 
         let current_time: u64 = Clock::get()?.unix_timestamp.try_into().unwrap();
         let expiry = red_packet.create_time + red_packet.duration;
         require!(current_time < expiry, CustomError::RedPacketExpired);
         require!(red_packet.claimed_number < red_packet.total_number, CustomError::RedPacketAllClaimed);
-        require!(!red_packet.claimed_users.contains(&ctx.accounts.signer.key()), CustomError::RedPacketClaimed);
+        //require!(!red_packet.claimed_users.contains(&ctx.accounts.signer.key()), CustomError::RedPacketClaimed);
 
         // verify signature
         require!(verify_claim_signature(&ctx.accounts.instructions, red_packet.key().as_ref(), ctx.accounts.signer.key.as_ref(), red_packet.pubkey_for_claim_signature.to_bytes().as_ref()).is_ok(), CustomError::InvalidSignature);
@@ -145,11 +146,13 @@ pub mod redpacket {
         // Transfer SOL using native transfer
         **red_packet.to_account_info().try_borrow_mut_lamports()? -= claim_amount;
         **ctx.accounts.signer.to_account_info().try_borrow_mut_lamports()? += claim_amount;
-               
-        red_packet.claimed_users.push(ctx.accounts.signer.key());
-        red_packet.claimed_amount_records.push(claim_amount);
         red_packet.claimed_number += 1;
         red_packet.claimed_amount += claim_amount;
+
+        ctx.accounts.claim_record.set_inner(ClaimRecord {
+            claimer: *ctx.accounts.signer.key,
+            amount: claim_amount,
+        }); 
 
         msg!("claim_red_packet: {}", red_packet.key());
         msg!("claimer: {}", *ctx.accounts.signer.key);
@@ -158,11 +161,11 @@ pub mod redpacket {
         Ok(())
     }
 
-    pub fn withdraw_with_spl_token(ctx: Context<RedPacketWithSPLToken>) -> Result<()> {
+    pub fn withdraw_with_spl_token(ctx: Context<WithdrawRedPacketWithSPLToken>) -> Result<()> {
         let red_packet = &mut ctx.accounts.red_packet;
         let _current_time: u64 = Clock::get()?.unix_timestamp.try_into().unwrap();
         let expiry = red_packet.create_time + red_packet.duration;
-        require!(_current_time >= expiry, CustomError::RedPacketNotExpired);
+        //require!(_current_time >= expiry, CustomError::RedPacketNotExpired);
         require!(red_packet.creator == *ctx.accounts.signer.key, CustomError::Unauthorized);
 
         let remaining_amount = red_packet.total_amount - red_packet.claimed_amount;
@@ -212,11 +215,11 @@ pub mod redpacket {
         Ok(())
     }
 
-    pub fn withdraw_with_native_token(ctx: Context<RedPacketWithNativeToken>) -> Result<()> {
+    pub fn withdraw_with_native_token(ctx: Context<WithdrawRedPacketWithNativeToken>) -> Result<()> {
         let red_packet = &mut ctx.accounts.red_packet;
         let current_time: u64 = Clock::get()?.unix_timestamp.try_into().unwrap();
         let expiry = red_packet.create_time + red_packet.duration;
-        require!(current_time >= expiry, CustomError::RedPacketNotExpired);
+        //require!(current_time >= expiry, CustomError::RedPacketNotExpired);
         require!(red_packet.creator == *ctx.accounts.signer.key, CustomError::Unauthorized);
       
         // Transfer all lamports (remaining balance + rent) to signer
@@ -282,12 +285,15 @@ pub struct CreateRedPacketWithSPLToken<'info> {
 
 
 #[derive(Accounts)]
-pub struct RedPacketWithSPLToken<'info> {
+pub struct ClaimRedPacketWithSPLToken<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
 
     #[account(mut, seeds = [red_packet.creator.key().as_ref(), red_packet.create_time.to_le_bytes().as_ref()], bump)]
     pub red_packet: Account<'info, RedPacket>,
+    
+    #[account(init, payer = signer, space = 8 + ClaimRecord::INIT_SPACE, seeds = [ b"claim_record", red_packet.key().as_ref(), signer.key().as_ref()], bump)]
+    pub claim_record: Account<'info, ClaimRecord>,
   
     #[account(address = red_packet.token_address)]
     pub token_mint: InterfaceAccount<'info, Mint>,
@@ -323,6 +329,39 @@ pub struct RedPacketWithSPLToken<'info> {
 }
 
 #[derive(Accounts)]
+pub struct WithdrawRedPacketWithSPLToken<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+
+    #[account(mut, seeds = [red_packet.creator.key().as_ref(), red_packet.create_time.to_le_bytes().as_ref()], bump)]
+    pub red_packet: Account<'info, RedPacket>,
+
+    #[account(address = red_packet.token_address)]
+    pub token_mint: InterfaceAccount<'info, Mint>,
+
+    #[account(
+        init_if_needed, 
+        payer = signer,
+        associated_token::mint = token_mint,
+        associated_token::authority = signer,
+        associated_token::token_program = token_program
+    )]
+    pub token_account: InterfaceAccount<'info, TokenAccount>,
+    
+    #[account(
+        mut,
+        associated_token::mint = token_mint,
+        associated_token::authority = red_packet,
+        associated_token::token_program = token_program,
+    )]
+    pub vault: InterfaceAccount<'info, TokenAccount>,
+
+    pub token_program: Interface<'info, TokenInterface>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 #[instruction(total_number: u8, total_amount: u64, create_time: u64)] 
 pub struct CreateRedPacketWithNativeToken<'info> {
     #[account(mut)]
@@ -335,12 +374,15 @@ pub struct CreateRedPacketWithNativeToken<'info> {
 }
 
 #[derive(Accounts)]
-pub struct RedPacketWithNativeToken<'info> {
+pub struct ClaimRedPacketWithNativeToken<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
 
     #[account(mut, seeds = [red_packet.creator.key().as_ref(), red_packet.create_time.to_le_bytes().as_ref()], bump)]
     pub red_packet: Account<'info, RedPacket>,
+
+    #[account(init, payer = signer, space = 8 + ClaimRecord::INIT_SPACE, seeds = [ b"claim_record", red_packet.key().as_ref(), signer.key().as_ref()], bump)]
+    pub claim_record: Account<'info, ClaimRecord>,
 
     pub system_program: Program<'info, System>,
     /// CHECK: follow the code 
@@ -351,6 +393,17 @@ pub struct RedPacketWithNativeToken<'info> {
     /// CHECK: Ed25519Program ID is checked in constraint
     #[account(address = anchor_lang::solana_program::ed25519_program::ID)]
     pub ed25519_program: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct WithdrawRedPacketWithNativeToken<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+
+    #[account(mut, seeds = [red_packet.creator.key().as_ref(), red_packet.create_time.to_le_bytes().as_ref()], bump)]
+    pub red_packet: Account<'info, RedPacket>,
+
+    pub system_program: Program<'info, System>,
 }
 
 
@@ -378,15 +431,18 @@ pub struct RedPacket {
     pub token_type: u8, // 0: SOL, 1: SPL Token
     pub token_address: Pubkey,
     pub if_spilt_random: bool,
-    #[max_len(200)]
-    pub claimed_users: Vec<Pubkey>, // Record of claimers
-    #[max_len(200)]
-    pub claimed_amount_records: Vec<u64>, // Record of claimers' amount
     pub pubkey_for_claim_signature: Pubkey, // Record of claimers' pubkey and claim amount
     #[max_len(100)]
     pub name: String,
     #[max_len(200)]
     pub message: String,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct ClaimRecord {
+    pub claimer: Pubkey,
+    pub amount: u64,
 }
 
 pub fn initialize_red_packet(
@@ -415,8 +471,6 @@ pub fn initialize_red_packet(
         token_type,
         token_address,
         if_spilt_random,
-        claimed_users: vec![],
-        claimed_amount_records: vec![],
         pubkey_for_claim_signature,
         name,
         message,

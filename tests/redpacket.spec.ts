@@ -150,13 +150,6 @@ describe("redpacket", () => {
     }
   });
 
-  // it.only("log", async () => {
-  //   const redPacket = await redPacketProgram.account.redPacket.fetch(
-  //     new PublicKey("H9bkzH88wHnePjd3ge1P78cgmxJNoaUJFoDT5FWPsaDA")
-  //   );
-  //   console.log(redPacket);
-  // });
-
   it("create SPL token redpacket", async () => {
     const creatorTokenBalanceBefore = await connection.getTokenAccountBalance(
       tokenAccount
@@ -191,7 +184,7 @@ describe("redpacket", () => {
 
     const redPacketTotalNumber = 3;
     const redPacketTotalAmount = new anchor.BN(4 * LAMPORTS_PER_SOL);
-    const redPacketDuration = new anchor.BN(8);
+    const redPacketDuration = new anchor.BN(6);
 
     try {
       const tx = await redPacketProgram.methods
@@ -356,6 +349,16 @@ describe("redpacket", () => {
       redPacketProgram.programId
     )[0];
 
+    // Re-derive the PDA
+    const claimRecord = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("claim_record"),
+        redPacket.toBuffer(),
+        randomUser.publicKey.toBuffer(),
+      ],
+      redPacketProgram.programId
+    )[0];
+
     console.log("Red Packet PDA:", redPacket.toString());
     console.log("Expected Red Packet:", splTokenRedPacket.toString());
 
@@ -407,6 +410,7 @@ describe("redpacket", () => {
         .accounts({
           signer: randomUser.publicKey,
           redPacket,
+          claimRecord,
           tokenMint: tokenMint,
           tokenAccount: claimerTokenAccount,
           vault: vaultAccount,
@@ -432,11 +436,6 @@ describe("redpacket", () => {
       redPacket
     );
     expect(redPacketAccount.claimedNumber.toString()).to.equal("1");
-    expect(redPacketAccount.claimedUsers.length).to.equal(1);
-    expect(redPacketAccount.claimedUsers[0].toString()).to.equal(
-      randomUser.publicKey.toString()
-    );
-    expect(redPacketAccount.claimedAmountRecords.length).to.equal(1);
 
     // Verify claimer received tokens
     const claimerBalanceAfter = await connection.getTokenAccountBalance(
@@ -444,10 +443,99 @@ describe("redpacket", () => {
     );
     expect(Number(claimerBalanceAfter.value.amount)).to.be.greaterThan(0);
 
-    expect(redPacketAccount.claimedAmountRecords[0].toString()).to.equal(
-      claimerBalanceAfter.value.amount
-    );
+    // expect(redPacketAccount.claimedAmountRecords[0].toString()).to.equal(
+    //   claimerBalanceAfter.value.amount
+    // );
     console.log("claimerBalance now", claimerBalanceAfter.value.amount);
+  });
+
+  it("fail to claim spl red packet twice", async () => {
+    // Re-derive the PDA
+    const redPacket = PublicKey.findProgramAddressSync(
+      [
+        redPacketCreator.publicKey.toBuffer(),
+        Buffer.from(splRedPacketCreateTime.toArray("le", 8)),
+      ],
+      redPacketProgram.programId
+    )[0];
+
+    const claimRecord = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("claim_record"),
+        redPacket.toBuffer(),
+        randomUser2.publicKey.toBuffer(),
+      ],
+      redPacketProgram.programId
+    )[0];
+
+    // Get claimer's token account
+    const claimerTokenAccount = getAssociatedTokenAddressSync(
+      tokenMint,
+      randomUser2.publicKey,
+      true,
+      TOKEN_PROGRAM
+    );
+
+    // Get vault account
+    const vaultAccount = getAssociatedTokenAddressSync(
+      tokenMint,
+      redPacket,
+      true,
+      TOKEN_PROGRAM
+    );
+
+    try {
+      // Generate the message
+      const message = Buffer.concat([
+        redPacket.toBytes(),
+        randomUser2.publicKey.toBytes(),
+      ]);
+      // randomUser sign the message, so the signature is invalid
+      const signature = nacl.sign.detached(message, randomUser2.secretKey);
+
+      const ed25519Instruction2 = Ed25519Program.createInstructionWithPublicKey(
+        {
+          publicKey: randomUser2.publicKey.toBytes(),
+          message: message,
+          signature: signature,
+        }
+      );
+
+      // Verify signature before creating instruction
+      const verifyResult = nacl.sign.detached.verify(
+        message,
+        signature,
+        randomUser2.publicKey.toBytes()
+      );
+      console.log("Signature verification in TS:", verifyResult);
+
+      const tx = await redPacketProgram.methods
+        .claimWithSplToken()
+        .accounts({
+          signer: randomUser2.publicKey,
+          redPacket,
+          claimRecord,
+          tokenMint: tokenMint,
+          tokenAccount: claimerTokenAccount,
+          vault: vaultAccount,
+          tokenProgram: TOKEN_PROGRAM,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          instructionSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
+        })
+        .preInstructions([ed25519Instruction2])
+        .signers([randomUser2])
+        .rpc();
+      await provider.connection.confirmTransaction(tx);
+
+      assert.fail(
+        "Expected transaction to fail with claim twice error, A seeds constraint was violated"
+      );
+    } catch (error) {
+      // Verify we got the expected error
+      console.log("catch error part");
+      expect(error.error.errorCode.code).to.equal("ConstraintSeeds.");
+    }
   });
 
   it("fail to claim spl red packet because of invalid signature", async () => {
@@ -539,6 +627,15 @@ describe("redpacket", () => {
     const claimerBalanceBefore = await connection.getBalance(
       randomUser.publicKey
     );
+    // Re-derive the PDA
+    const claimRecord = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("claim_record"),
+        redPacket.toBuffer(),
+        randomUser.publicKey.toBuffer(),
+      ],
+      redPacketProgram.programId
+    )[0];
 
     // Generate the message
     const message = Buffer.concat([
@@ -560,6 +657,7 @@ describe("redpacket", () => {
       .claimWithNativeToken()
       .accounts({
         redPacket,
+        claimRecord,
         signer: randomUser.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
@@ -580,11 +678,6 @@ describe("redpacket", () => {
     expect(claimerBalanceAfter - claimerBalanceBefore).equal(
       0.1 * LAMPORTS_PER_SOL
     );
-    expect(redPacketAccount.claimedUsers.length).equal(1);
-    expect(redPacketAccount.claimedUsers[0].toString()).equal(
-      randomUser.publicKey.toString()
-    );
-    expect(redPacketAccount.claimedAmountRecords.length).to.equal(1);
   });
 
   it("create and claim spl token red packet with random amount", async () => {
@@ -666,10 +759,20 @@ describe("redpacket", () => {
       true,
       TOKEN_PROGRAM
     );
+
+    const claimRecord = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("claim_record"),
+        redPacket.toBuffer(),
+        randomUser.publicKey.toBuffer(),
+      ],
+      redPacketProgram.programId
+    )[0];
     const claimTx = await redPacketProgram.methods
       .claimWithSplToken()
       .accounts({
         redPacket,
+        claimRecord,
         signer: randomUser.publicKey,
         tokenMint: tokenMint,
         tokenAccount: claimer1TokenAccount,
@@ -682,6 +785,13 @@ describe("redpacket", () => {
       .signers([randomUser])
       .rpc();
     await provider.connection.confirmTransaction(claimTx);
+
+    const claimRecordAfter = await redPacketProgram.account.claimRecord.fetch(
+      claimRecord
+    );
+    expect(claimRecordAfter.claimer.toString()).equal(
+      randomUser.publicKey.toString()
+    );
 
     // Generate the message
     const message2 = Buffer.concat([
@@ -703,10 +813,19 @@ describe("redpacket", () => {
       true,
       TOKEN_PROGRAM
     );
+    const claimRecord2 = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("claim_record"),
+        redPacket.toBuffer(),
+        randomUser2.publicKey.toBuffer(),
+      ],
+      redPacketProgram.programId
+    )[0];
     const claimTx2 = await redPacketProgram.methods
       .claimWithSplToken()
       .accounts({
         redPacket,
+        claimRecord: claimRecord2,
         signer: randomUser2.publicKey,
         tokenMint: tokenMint,
         tokenAccount: claimer2TokenAccount,
@@ -764,12 +883,6 @@ describe("redpacket", () => {
         .sub(redPacketAccountAfter.claimedAmount)
         .toString()
     ).equal("0");
-    console.log(
-      "redPacketAccountAfter",
-      redPacketAccountAfter.claimedAmountRecords[0].toString(),
-      redPacketAccountAfter.claimedAmountRecords[1].toString(),
-      redPacketAccountAfter.claimedAmountRecords[2].toString()
-    );
   });
 
   it("create and claim native token red packet with random amount", async () => {
@@ -832,10 +945,19 @@ describe("redpacket", () => {
       message: message,
       signature: signature,
     });
+    const claimRecord = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("claim_record"),
+        redPacket.toBuffer(),
+        randomUser.publicKey.toBuffer(),
+      ],
+      redPacketProgram.programId
+    )[0];
     const claimTx = await redPacketProgram.methods
       .claimWithNativeToken()
       .accounts({
         redPacket,
+        claimRecord,
         signer: randomUser.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
@@ -858,10 +980,19 @@ describe("redpacket", () => {
       message: message2,
       signature: signature2,
     });
+    const claimRecord2 = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("claim_record"),
+        redPacket.toBuffer(),
+        randomUser2.publicKey.toBuffer(),
+      ],
+      redPacketProgram.programId
+    )[0];
     const claimTx2 = await redPacketProgram.methods
       .claimWithNativeToken()
       .accounts({
         redPacket,
+        claimRecord: claimRecord2,
         signer: randomUser2.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
@@ -883,11 +1014,20 @@ describe("redpacket", () => {
       message: message3,
       signature: signature3,
     });
+    const claimRecord3 = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("claim_record"),
+        redPacket.toBuffer(),
+        redPacketCreator.publicKey.toBuffer(),
+      ],
+      redPacketProgram.programId
+    )[0];
 
     const claimTx3 = await redPacketProgram.methods
       .claimWithNativeToken()
       .accounts({
         redPacket,
+        claimRecord: claimRecord3,
         signer: redPacketCreator.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
@@ -909,12 +1049,6 @@ describe("redpacket", () => {
         .sub(redPacketAccountAfter.claimedAmount)
         .toString()
     ).equal("0");
-    console.log(
-      "redPacketAccountAfter",
-      redPacketAccountAfter.claimedAmountRecords[0].toString(),
-      redPacketAccountAfter.claimedAmountRecords[1].toString(),
-      redPacketAccountAfter.claimedAmountRecords[2].toString()
-    );
   });
 
   it("withdraw spl token red packet", async () => {
