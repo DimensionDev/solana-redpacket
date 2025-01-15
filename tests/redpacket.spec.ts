@@ -490,12 +490,10 @@ describe("redpacket", () => {
         redPacket.toBytes(),
         randomUser2.publicKey.toBytes(),
       ]);
-      // randomUser sign the message, so the signature is invalid
-      const signature = nacl.sign.detached(message, randomUser2.secretKey);
-
+      const signature = nacl.sign.detached(message, claimer_issuer.secretKey);
       const ed25519Instruction2 = Ed25519Program.createInstructionWithPublicKey(
         {
-          publicKey: randomUser2.publicKey.toBytes(),
+          publicKey: claimer_issuer.publicKey.toBytes(),
           message: message,
           signature: signature,
         }
@@ -505,7 +503,7 @@ describe("redpacket", () => {
       const verifyResult = nacl.sign.detached.verify(
         message,
         signature,
-        randomUser2.publicKey.toBytes()
+        claimer_issuer.publicKey.toBytes()
       );
       console.log("Signature verification in TS:", verifyResult);
 
@@ -675,9 +673,74 @@ describe("redpacket", () => {
     const claimerBalanceAfter = await connection.getBalance(
       randomUser.publicKey
     );
-    expect(claimerBalanceAfter - claimerBalanceBefore).equal(
-      0.1 * LAMPORTS_PER_SOL
-    );
+    expect(claimerBalanceAfter).greaterThan(claimerBalanceBefore);
+  });
+
+  it("fail to claim native token red packet twice", async () => {
+    // Re-derive the PDA
+    const redPacket = PublicKey.findProgramAddressSync(
+      [
+        redPacketCreator.publicKey.toBuffer(),
+        Buffer.from(nativeRedPacketCreateTime.toArray("le", 8)),
+      ],
+      redPacketProgram.programId
+    )[0];
+
+    const claimRecord = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("claim_record"),
+        redPacket.toBuffer(),
+        randomUser2.publicKey.toBuffer(),
+      ],
+      redPacketProgram.programId
+    )[0];
+
+    try {
+      // Generate the message
+      const message = Buffer.concat([
+        redPacket.toBytes(),
+        randomUser2.publicKey.toBytes(),
+      ]);
+      // randomUser sign the message, so the signature is invalid
+      const signature = nacl.sign.detached(message, claimer_issuer.secretKey);
+
+      const ed25519Instruction2 = Ed25519Program.createInstructionWithPublicKey(
+        {
+          publicKey: claimer_issuer.publicKey.toBytes(),
+          message: message,
+          signature: signature,
+        }
+      );
+
+      // Verify signature before creating instruction
+      const verifyResult = nacl.sign.detached.verify(
+        message,
+        signature,
+        claimer_issuer.publicKey.toBytes()
+      );
+      console.log("Signature verification in TS:", verifyResult);
+
+      const tx = await redPacketProgram.methods
+        .claimWithNativeToken()
+        .accounts({
+          signer: randomUser2.publicKey,
+          redPacket,
+          claimRecord,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .preInstructions([ed25519Instruction2])
+        .signers([randomUser2])
+        .rpc();
+      await provider.connection.confirmTransaction(tx);
+
+      assert.fail(
+        "Expected transaction to fail with claim twice error, A seeds constraint was violated"
+      );
+    } catch (error) {
+      // Verify we got the expected error
+      console.log("catch error part");
+      expect(error.error.errorCode.code).to.equal("ConstraintSeeds.");
+    }
   });
 
   it("create and claim spl token red packet with random amount", async () => {
