@@ -115,6 +115,7 @@ pub mod redpacket {
         red_packet.claimed_amount += claim_amount;
 
         ctx.accounts.claim_record.set_inner(ClaimRecord {
+            red_packet_key: red_packet.key(),
             claimer: *ctx.accounts.signer.key,
             amount: claim_amount,
         }); 
@@ -149,6 +150,7 @@ pub mod redpacket {
         red_packet.claimed_amount += claim_amount;
 
         ctx.accounts.claim_record.set_inner(ClaimRecord {
+            red_packet_key: red_packet.key(),
             claimer: *ctx.accounts.signer.key,
             amount: claim_amount,
         }); 
@@ -241,7 +243,6 @@ pub mod redpacket {
     }
 
 }
-
 
 #[derive(Accounts)]
 #[instruction(total_number: u8, total_amount: u64, create_time: u64)] 
@@ -440,6 +441,7 @@ pub struct RedPacket {
 #[account]
 #[derive(InitSpace)]
 pub struct ClaimRecord {
+    pub red_packet_key: Pubkey,
     pub claimer: Pubkey,
     pub amount: u64,
 }
