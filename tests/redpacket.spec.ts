@@ -184,7 +184,7 @@ describe("redpacket", () => {
 
     const redPacketTotalNumber = 3;
     const redPacketTotalAmount = new anchor.BN(4 * LAMPORTS_PER_SOL);
-    const redPacketDuration = new anchor.BN(5);
+    const redPacketDuration = new anchor.BN(6);
 
     try {
       const tx = await redPacketProgram.methods
@@ -550,10 +550,13 @@ describe("redpacket", () => {
       await provider.connection.confirmTransaction(tx);
       assert.fail("Cannot claim twice");
     } catch (error) {
-      console.error("Transaction failed:", error);
-      if (error.logs) {
-        console.log("Transaction logs:", error.logs);
-      }
+      console.log(
+        "Fail to claim twice. Error structure:",
+        JSON.stringify(error, null, 2)
+      );
+      // if (error.logs) {
+      //   console.log("Transaction logs:", error.logs);
+      // }
       //expect(error.error.errorCode.code).to.equal("ConstraintSeeds.");
     }
   });
@@ -630,8 +633,10 @@ describe("redpacket", () => {
       assert.fail("Expected transaction to fail with InvalidSignature error");
     } catch (error) {
       // Verify we got the expected error
-      console.log("catch error part");
-      console.log("error", error);
+      console.log(
+        "Fail to invalidate signature. Error structure:",
+        JSON.stringify(error, null, 2)
+      );
       expect(error.error.errorCode.code).to.equal("InvalidSignature");
     }
   });
