@@ -15,7 +15,7 @@ use solana_program::hash::hash;
 pub use constants::*;
 pub use transfer::*;
 
-declare_id!("CXT16oAAbmgpPZsL2sGmfSUNrATk3AsFVU18thTUVNxx");
+declare_id!("yoAKw22kCCCStCP5uJ9mkMa8NGjYdtnGgNDxBrv8kfe");
 
 
 #[program]
