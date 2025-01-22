@@ -489,18 +489,19 @@ fn calculate_claim_amount(red_packet: &Account<RedPacket>, signer_key: Pubkey) -
     if red_packet.if_spilt_random == constants::RED_PACKET_SPILT_EQUAL {
         claim_amount = red_packet.total_amount / red_packet.total_number as u64;   
     } else {
-        let random_value = generate_random_number(red_packet.key(), signer_key);
+        let random_value = generate_random_number(red_packet.key(), signer_key, red_packet.claimed_amount);
         let claim_value = random_value % ((remaining_amount * 2) / (red_packet.total_number - red_packet.claimed_number) as u64);
         claim_amount = if claim_value == 0 { 1 } else { claim_value };
     } 
     return claim_amount;
 }
 
-fn generate_random_number(redpacket_key: Pubkey, signer_key: Pubkey) -> u64 {
+fn generate_random_number(redpacket_key: Pubkey, signer_key: Pubkey, claimed_amount: u64) -> u64 {
     let clock = Clock::get().unwrap();
     let current_timestamp = clock.unix_timestamp;
+    let current_slot = clock.slot;
 
-    let seed = format!("{}{}{}", redpacket_key, signer_key, current_timestamp);
+    let seed = format!("{}{}{}{}{}", redpacket_key, signer_key, current_timestamp, claimed_amount, current_slot);
     let hash_value = hash(seed.as_bytes()); 
     u64::from_le_bytes(hash_value.to_bytes()[0..8].try_into().unwrap())
 }
