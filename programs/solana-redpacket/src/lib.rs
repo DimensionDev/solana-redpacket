@@ -90,7 +90,7 @@ pub mod redpacket {
         // verify signature
         require!(verify_claim_signature(&ctx.accounts.instructions, red_packet.key().as_ref(), ctx.accounts.signer.key.as_ref(), red_packet.pubkey_for_claim_signature.to_bytes().as_ref()).is_ok(), CustomError::InvalidSignature);
         
-        let claim_amount = calculate_claim_amount(&red_packet, ctx.accounts.signer.key());
+        let claim_amount = calculate_claim_amount(&red_packet, ctx.accounts.signer.key())?;
 
         // check if the claim amount is valid
         require!(red_packet.claimed_amount + claim_amount <= red_packet.total_amount, CustomError::InvalidClaimAmount);
@@ -138,7 +138,7 @@ pub mod redpacket {
 
         // verify signature
         require!(verify_claim_signature(&ctx.accounts.instructions, red_packet.key().as_ref(), ctx.accounts.signer.key.as_ref(), red_packet.pubkey_for_claim_signature.to_bytes().as_ref()).is_ok(), CustomError::InvalidSignature);
-        let claim_amount = calculate_claim_amount(&red_packet, ctx.accounts.signer.key());
+        let claim_amount = calculate_claim_amount(&red_packet, ctx.accounts.signer.key())?;
         
         // check if the claim amount is valid
         require!(red_packet.claimed_amount + claim_amount <= red_packet.total_amount, CustomError::InvalidClaimAmount);
@@ -478,22 +478,30 @@ pub fn initialize_red_packet(
     });
 }
 
-fn calculate_claim_amount(red_packet: &Account<RedPacket>, signer_key: Pubkey) -> u64 {
-    let claim_amount: u64;
+fn calculate_claim_amount(red_packet: &Account<RedPacket>, signer_key: Pubkey) -> Result<u64> {
 
     let remaining_amount = red_packet.total_amount - red_packet.claimed_amount;
     if red_packet.total_number - red_packet.claimed_number == 1 {
-        return remaining_amount;
+        return Ok(remaining_amount);
     }
 
     if red_packet.if_spilt_random == constants::RED_PACKET_SPILT_EQUAL {
-        claim_amount = red_packet.total_amount / red_packet.total_number as u64;   
-    } else {
-        let random_value = generate_random_number(red_packet.key(), signer_key, red_packet.claimed_amount);
-        let claim_value = random_value % ((remaining_amount * 2) / (red_packet.total_number - red_packet.claimed_number) as u64);
-        claim_amount = if claim_value == 0 { 1 } else { claim_value };
+        return Ok(red_packet.total_amount / red_packet.total_number as u64);   
     } 
-    return claim_amount;
+    
+    let random_value = generate_random_number(red_packet.key(), signer_key, red_packet.claimed_amount);
+    let remaining_users = (red_packet.total_number - red_packet.claimed_number) as u64;
+
+    let doubled_amount = remaining_amount.checked_mul(2)
+        .ok_or(error!(CustomError::ArithmeticOverflow))?;
+
+        let max_per_user = doubled_amount.checked_div(remaining_users)
+        .ok_or(error!(CustomError::ArithmeticOverflow))?;
+
+    let claim_value = random_value % max_per_user;
+    let claim_amount = if claim_value == 0 { 1 } else { claim_value };
+
+    Ok(claim_amount)
 }
 
 fn generate_random_number(redpacket_key: Pubkey, signer_key: Pubkey, claimed_amount: u64) -> u64 {
@@ -590,5 +598,7 @@ pub enum CustomError {
     #[msg("All the red packet has been claimed.")]
     RedPacketAllClaimed,
     #[msg("You are not authorized to perform this action.")]
-    Unauthorized
+    Unauthorized,
+    #[msg("Arithmetic overflow")]
+    ArithmeticOverflow,
 }
