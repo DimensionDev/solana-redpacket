@@ -904,6 +904,11 @@ export type Redpacket = {
       "code": 6015,
       "name": "unauthorized",
       "msg": "You are not authorized to perform this action."
+    },
+    {
+      "code": 6016,
+      "name": "arithmeticOverflow",
+      "msg": "Arithmetic overflow"
     }
   ],
   "types": [
