@@ -1,27 +1,29 @@
 # Implement red packet on solana
-original code:
-https://github.com/DimensionDev/RedPacket/
+The project is based on the original code:
+https://github.com/DimensionDev/RedPacket/.
+And make the red packet support on Solana network.
+
 ## Get Started
 ```
 anchor build
 
 anchor test
 ```
-** right now, withdraw test pass will fail, because time check. Maybe need to use bank rewrite withdraw test.
+** right now, withdraw test pass will fail, because time check. Maybe need to use bankrun to rewrite withdraw test.
 
-## Todo List
+## Audit report
 
-feature:
-- [x] red packet ID design (seeds = [red_packet.creator.key().as_ref(), red_packet.create_time.to_le_bytes().as_ref()])
-- [x] claim red packet with signature issued by frontend
-- [x] split red packet with random amount 
-- [x] claim details record
-- [x] upgrade program
-- [ ] add more test cases (in progress)
-- [ ] bank run test (with time travel)
-- [ ] cost report
+ [audit report](docs/audit_report.pdf)
+
+## Contribute
+Any contribution is welcomed to make it better.
+
+If you have any questions, please create an [issue](https://github.com/DimensionDev/solana-redpacket/issues).
+
+## Security report
+
+If you have any security issue, please send to <security@mask.io>.
+
+## future feature list 
 - [ ] claimer can specify a recipient account instead of the claimer's account itself
 - [ ] NFT red packet
-
-# Reference:
-https://github.com/solana-developers/developer-bootcamp-2024
