@@ -184,7 +184,7 @@ describe("redpacket", () => {
 
     const redPacketTotalNumber = 3;
     const redPacketTotalAmount = new anchor.BN(4 * LAMPORTS_PER_SOL);
-    const redPacketDuration = new anchor.BN(6 * 60 * 60 * 24);
+    const redPacketDuration = new anchor.BN(10);
 
     try {
       const tx = await redPacketProgram.methods

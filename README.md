@@ -13,7 +13,7 @@ anchor test
 
 ## Audit report
 
- [audit report](docs/audit_report.pdf)
+ [audit report](audit_report/audit_report.pdf)
 
 ## Contribute
 Any contribution is welcomed to make it better.
